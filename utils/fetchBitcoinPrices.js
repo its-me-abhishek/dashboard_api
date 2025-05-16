@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 async function fetchBitcoinPrices(BITCOIN_PRICE_URL, BITCOIN_PRICE_URL_SUFFIX) {
-    const currencies = ["USD", "EUR", "INR"];
+    const currencies = ["USD", "EUR", "JPY"];
     const prices = {};
 
     try {

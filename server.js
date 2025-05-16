@@ -1,41 +1,37 @@
 import { WebSocketServer } from 'ws';
 import dotenv from 'dotenv';
 import fetchBitcoinPrices from "./utils/fetchBitcoinPrices.js";
-import fetchEnergyPricesForAllCountries from './utils/fetchEnergyData.js';
-import fetchMiningData from './utils/fetchMiningData.js';
-import fetchBlockchainData from './utils/fetchBlockchainData.js';
+import fetchGlobalCryptoData from './utils/fetchGlobalData.js';
 
 dotenv.config();
 
 const wss = new WebSocketServer({ port: 5000 });
 
-const BITCOIN_RPC_URL = process.env.BITCOIN_RPC_URL;
-const MEMPOOL_API_URL = process.env.MEMPOOL_API_URL;
 const BITCOIN_PRICE_URL = process.env.BITCOIN_PRICE_URL;
 const BITCOIN_PRICE_URL_SUFFIX = process.env.BITCOIN_PRICE_URL_SUFFIX;
-const ENERGY_API_URL = process.env.ENERGY_API_URL;
+// const ENERGY_API_URL = process.env.ENERGY_API_URL;
 
 // Send combined data to all connected WebSocket clients
 async function sendDataToClients() {
-  const blockchainData = await fetchBlockchainData(BITCOIN_RPC_URL);
-  const miningData = await fetchMiningData(MEMPOOL_API_URL);
-  const bitcoinPrice = await fetchBitcoinPrices(BITCOIN_PRICE_URL, BITCOIN_PRICE_URL_SUFFIX);
-  const energyPrices = await fetchEnergyPricesForAllCountries(ENERGY_API_URL);
+  const [bitcoinPrice, globalCryptoData] = await Promise.all([
+    fetchBitcoinPrices(BITCOIN_PRICE_URL, BITCOIN_PRICE_URL_SUFFIX),
+    fetchGlobalCryptoData('USD')
+  ]);
 
-  if (blockchainData && miningData && bitcoinPrice && energyPrices) {
+
+  if (bitcoinPrice && globalCryptoData) {
     const data = {
-      type: "blockchain_update",
+      type: "bitcoin_update",
       data: {
-        blocks: blockchainData.blocks,
-        bestblockhash: blockchainData.bestblockhash,
-        difficulty: blockchainData.difficulty,
-        verificationprogress: blockchainData.verificationprogress,
-        chain: blockchainData.chain,
-        mediantime: blockchainData.mediantime,
-        mining_difficulty_change: miningData.difficultyChange,
-        estimated_hashrate: miningData.estimatedHashrate,
         price: bitcoinPrice,
-        energy_prices: energyPrices,
+        global_stats: {
+          market_cap: globalCryptoData.marketCap,
+          market_cap_change: globalCryptoData.marketCapChange,
+          active_cryptocurrencies: globalCryptoData.activeCryptocurrencies,
+          active_markets: globalCryptoData.activeMarkets,
+          bitcoin_dominance: globalCryptoData.bitcoinDominance,
+          last_updated: globalCryptoData.lastUpdated
+        },
         time: new Date().toLocaleString(),
       },
     };
@@ -43,7 +39,7 @@ async function sendDataToClients() {
     console.log("Broadcasting update:", data);
 
     wss.clients.forEach((client) => {
-      if (client.readyState === WebSocketServer.OPEN) {
+      if (client.readyState === client.OPEN) {
         client.send(JSON.stringify(data));
       }
     });
@@ -51,7 +47,7 @@ async function sendDataToClients() {
 }
 
 // Fetch and send every 10 seconds
-setInterval(sendDataToClients, 10000);
+setInterval(sendDataToClients, 1000);
 
 // WebSocket connection handler
 wss.on("connection", (ws) => {
